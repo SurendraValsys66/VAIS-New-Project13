@@ -112,12 +112,6 @@ const utilityItems = [
     tourId: "integrations-nav",
   },
   {
-    name: "Subscription",
-    href: "/subscription",
-    icon: Crown,
-    tourId: "subscription-nav",
-  },
-  {
     name: "Manage Users",
     href: "/manage-users",
     icon: Users,
@@ -943,6 +937,24 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                               </div>
                               <div className="text-xs text-gray-500">
                                 Manage your account details
+                              </div>
+                            </div>
+                          </Link>
+                        </DropdownMenuItem>
+
+                        <DropdownMenuItem
+                          asChild
+                          className="cursor-pointer items-start gap-3 py-3"
+                        >
+                          <Link
+                            to="/subscription"
+                            className="flex items-start gap-3 w-full"
+                          >
+                            <Crown className="mt-0.5 h-4 w-4 text-gray-600" />
+                            <div>
+                              <div className="font-medium">Subscription</div>
+                              <div className="text-xs text-gray-500">
+                                Manage plan & billing
                               </div>
                             </div>
                           </Link>

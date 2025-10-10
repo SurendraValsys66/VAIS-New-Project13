@@ -124,12 +124,35 @@ function planDisplay(plan: Plan, billing: "monthly" | "annual") {
   // Price label
   const isEnterprise = plan.id === "enterprise";
   const price = priceFor(plan, billing);
-  const priceLabel = isEnterprise
-    ? "Custom Plan"
-    : price === 0
-      ? "$0"
-      : `$${price}`;
-  const priceSuffix = isEnterprise || price === 0 ? "" : "/month";
+
+  let priceLabel: React.ReactNode;
+  let priceSuffix: string = "";
+
+  if (isEnterprise) {
+    priceLabel = "Custom Plan";
+    priceSuffix = "";
+  } else if (price === 0) {
+    priceLabel = "$0";
+    priceSuffix = "";
+  } else if (
+    billing === "annual" &&
+    plan.priceAnnual > 0 &&
+    plan.priceAnnual < plan.priceMonthly
+  ) {
+    // Show discount: original monthly price struck-through then discounted annual monthly price
+    priceLabel = (
+      <span className="inline-flex items-baseline gap-2">
+        <span className="line-through text-valasys-gray-400">
+          {formatPrice(plan.priceMonthly)}
+        </span>
+        <span className="font-bold">{formatPrice(plan.priceAnnual)}</span>
+      </span>
+    );
+    priceSuffix = "/month";
+  } else {
+    priceLabel = `$${price}`;
+    priceSuffix = "/month";
+  }
 
   // Billed note and credits text based on provided spec
   let billedNote =
@@ -146,7 +169,7 @@ function planDisplay(plan: Plan, billing: "monthly" | "annual") {
     if (plan.id === "scale") credits = "72,000 credits per user / year";
     if (plan.id === "enterprise") credits = "Custom credits";
   } else {
-    if (plan.id === "growth") credits = "3,000 credits per user / year";
+    if (plan.id === "growth") credits = "3,000 credits per user / month";
     if (plan.id === "scale") credits = "6,000 credits per user / month";
     if (plan.id === "enterprise") credits = "Custom credits";
   }
@@ -254,9 +277,7 @@ function PlanCard({
                     </span>
                   )}
                 </div>
-                <div className="text-xs text-valasys-gray-500">
-                  {d.billedNote}
-                </div>
+                <div className="text-valasys-gray-500">{d.billedNote}</div>
               </>
             );
           })()}
@@ -280,11 +301,10 @@ function PlanCard({
         <div className="pt-3 grid grid-cols-1">
           {plan.id === "enterprise" ? (
             <Button
-              onClick={onSelect}
-              className={`w-full ${selected ? "bg-[#424242] text-white border-2 border-[#424242]" : "border-2 border-valasys-orange text-valasys-orange bg-white hover:bg-gradient-to-r hover:from-valasys-orange hover:to-valasys-orange-light hover:text-white"}`}
+              asChild
+              className="w-full border-2 border-valasys-orange text-valasys-orange bg-white hover:bg-gradient-to-r hover:from-valasys-orange hover:to-valasys-orange-light hover:text-white"
             >
-              {selected && <Check className="w-4 h-4 mr-2 text-white" />}
-              Contact to our sales
+              <a href="mailto:sales@valasys.ai">Contact to our sales</a>
             </Button>
           ) : (
             <Button
@@ -368,31 +388,157 @@ function PlanCard({
   );
 }
 
-function FeatureRow({
-  label,
-  tiers,
+function PlanComparisonTable({
+  billing,
+  plans,
+  selectedPlan,
+  onSelect,
 }: {
-  label: string;
-  tiers: (boolean | string | "-")[];
+  billing: "monthly" | "annual";
+  plans: Plan[];
+  selectedPlan: Plan["id"];
+  onSelect: (id: Plan["id"]) => void;
 }) {
   return (
-    <div className="grid grid-cols-5 gap-4 items-center py-3 border-b border-valasys-gray-200">
-      <div className="text-sm font-medium text-valasys-gray-800">{label}</div>
-      {tiers.map((t, i) => (
-        <div key={i} className="flex justify-center text-sm">
-          {typeof t === "string" ? (
-            <span className="px-2 py-0.5 rounded-full bg-valasys-gray-100 text-valasys-gray-800 border border-valasys-gray-200">
-              {t}
-            </span>
-          ) : t === "-" ? (
-            <Minus className="w-4 h-4 text-valasys-gray-400" />
-          ) : t ? (
-            <Check className="w-5 h-5 text-green-600" />
-          ) : (
-            <Minus className="w-4 h-4 text-valasys-gray-300" />
-          )}
-        </div>
-      ))}
+    <div className="overflow-x-auto border border-valasys-gray-200 rounded-lg">
+      <table className="min-w-[720px] w-full text-sm">
+        <thead>
+          <tr className="bg-valasys-gray-50">
+            <th className="text-left p-3 font-semibold text-valasys-gray-700">
+              Feature
+            </th>
+            {plans.map((p) => {
+              const d = planDisplay(p, billing);
+              const isSelected = p.id === selectedPlan;
+              return (
+                <th
+                  key={p.id}
+                  className={`p-3 font-semibold text-valasys-gray-800 text-left align-bottom ${isSelected ? "bg-yellow-50 border-b-2 border-yellow-300" : ""}`}
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      {planIcon(p.id)}
+                      <span className="font-semibold">{p.name}</span>
+                    </div>
+                    <div className="text-[13px] font-medium">
+                      {d.priceLabel}
+                      {d.priceSuffix && (
+                        <span className="text-valasys-gray-500">
+                          {" "}
+                          {d.priceSuffix}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[11px] text-valasys-gray-500">
+                      {d.billedNote}
+                    </div>
+                    <div className="text-[13px] font-semibold text-black flex items-center gap-2">
+                      <Coins className="w-4 h-4 text-black" /> {d.credits}
+                    </div>
+                    <div className="pt-2">
+                      {p.id === "enterprise" ? (
+                        <Button
+                          asChild
+                          className="w-full border-2 border-valasys-orange text-valasys-orange bg-white hover:bg-gradient-to-r hover:from-valasys-orange hover:to-valasys-orange-light hover:text-white"
+                        >
+                          <a href="mailto:sales@valasys.ai">
+                            Contact to our sales
+                          </a>
+                        </Button>
+                      ) : (
+                        <Button
+                          onClick={() => onSelect(p.id)}
+                          disabled={p.id === "free"}
+                          className={`w-full ${isSelected ? "bg-[#424242] text-white" : "bg-gradient-to-r from-valasys-orange to-valasys-orange-light text-white hover:from-valasys-orange/90 hover:to-valasys-orange-light/90"}`}
+                        >
+                          {isSelected && <Check className="w-4 h-4 mr-2" />}
+                          {isSelected
+                            ? "Selected"
+                            : p.id === "free"
+                              ? "Current Plan"
+                              : "Select Plan"}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </th>
+              );
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td
+              colSpan={1 + plans.length}
+              className="p-3 text-[12px] font-semibold uppercase tracking-wide text-valasys-gray-500 bg-white"
+            >
+              Core Platform Modules
+            </td>
+          </tr>
+          {coreRows.map((row, i) => (
+            <tr key={`core-${i}`} className="border-t border-valasys-gray-200">
+              <td className="p-3 text-valasys-gray-800 font-medium">
+                {row.label}
+              </td>
+              {row.values.map((v, idx) => (
+                <td
+                  key={idx}
+                  className={`p-3 ${plans[idx].id === selectedPlan ? "bg-yellow-50" : "bg-white"}`}
+                >
+                  {v === "-" || v === "✖" ? (
+                    <CircleX className="w-5 h-5 text-red-500" />
+                  ) : v === true ? (
+                    <CircleCheckBig className="w-5 h-5 text-green-600" />
+                  ) : v === false ? (
+                    <CircleX className="w-5 h-5 text-red-500" />
+                  ) : typeof v === "string" ? (
+                    <span className="inline-block rounded-full border px-2 py-0.5 text-xs text-valasys-gray-700">
+                      {v}
+                    </span>
+                  ) : null}
+                </td>
+              ))}
+            </tr>
+          ))}
+
+          <tr>
+            <td
+              colSpan={1 + plans.length}
+              className="p-3 text-[12px] font-semibold uppercase tracking-wide text-valasys-gray-500 bg-white"
+            >
+              High Value Account Insights
+            </td>
+          </tr>
+          {insightsRows.map((row, i) => (
+            <tr
+              key={`insights-${i}`}
+              className="border-t border-valasys-gray-200"
+            >
+              <td className="p-3 text-valasys-gray-800 font-medium">
+                {row.label}
+              </td>
+              {row.values.map((v, idx) => (
+                <td
+                  key={idx}
+                  className={`p-3 ${plans[idx].id === selectedPlan ? "bg-yellow-50" : "bg-white"}`}
+                >
+                  {v === "-" || v === "✖" ? (
+                    <CircleX className="w-5 h-5 text-red-500" />
+                  ) : v === true ? (
+                    <CircleCheckBig className="w-5 h-5 text-green-600" />
+                  ) : v === false ? (
+                    <CircleX className="w-5 h-5 text-red-500" />
+                  ) : typeof v === "string" ? (
+                    <span className="inline-block rounded-full border px-2 py-0.5 text-xs text-valasys-gray-700">
+                      {v}
+                    </span>
+                  ) : null}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -421,8 +567,67 @@ export default function Subscription() {
     });
   };
   const sortedPlans = useMemo(() => plans, []);
+  const pageRef = useRef<HTMLDivElement | null>(null);
+  const [summaryBounds, setSummaryBounds] = useState<{
+    left: number;
+    width: number;
+  }>({ left: 0, width: 0 });
+  const summaryRef = useRef<HTMLDivElement | null>(null);
+  const [summaryHeight, setSummaryHeight] = useState(0);
+  const [isDesktop, setIsDesktop] = useState<boolean>(
+    typeof window !== "undefined" ? window.innerWidth >= 768 : true,
+  );
+  const recalcBounds = () => {
+    const el = pageRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    setSummaryBounds({
+      left: Math.round(rect.left),
+      width: Math.round(rect.width),
+    });
+  };
+  React.useEffect(() => {
+    recalcBounds();
+    const el = pageRef.current;
+    const ro = new ResizeObserver(() => recalcBounds());
+    if (el) ro.observe(el);
+    const onResize = () => {
+      setIsDesktop(window.innerWidth >= 768);
+      recalcBounds();
+    };
+    const onScroll = () => recalcBounds();
+    const onTransitionEnd = () => recalcBounds();
+    window.addEventListener("resize", onResize);
+    window.addEventListener("scroll", onScroll, { passive: true } as any);
+    document.addEventListener("transitionend", onTransitionEnd);
+    const tid = setTimeout(recalcBounds, 300);
+    return () => {
+      if (el) ro.unobserve(el);
+      ro.disconnect();
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("scroll", onScroll as any);
+      document.removeEventListener("transitionend", onTransitionEnd);
+      clearTimeout(tid);
+    };
+  }, []);
+
+  React.useEffect(() => {
+    const el = summaryRef.current;
+    const measure = () => setSummaryHeight(el ? el.offsetHeight : 0);
+    measure();
+    const ro = new ResizeObserver(measure);
+    if (el) ro.observe(el);
+    window.addEventListener("resize", measure);
+    return () => {
+      if (el) ro.unobserve(el);
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [selectedPlan, billing, showComparison]);
+
   const selectPlan = (id: "free" | "growth" | "scale" | "enterprise") => {
     setSelectedPlan(id);
+    setTimeout(recalcBounds, 250);
   };
   const selectedPlanObj = useMemo(
     () => sortedPlans.find((p) => p.id === selectedPlan),
@@ -431,7 +636,11 @@ export default function Subscription() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-8 pb-28">
+      <div
+        className="space-y-8"
+        ref={pageRef}
+        style={{ paddingBottom: (summaryHeight || 0) + 24 }}
+      >
         <div className="flex flex-col items-center gap-3 text-center">
           <h1 className="text-2xl font-bold text-valasys-gray-900">
             Empowering business growth from a single platform
@@ -480,12 +689,11 @@ export default function Subscription() {
         </div>
 
         {showComparison && (
-          <Card className="overflow-hidden" id="plan-comparison">
+          <div className="mt-6" id="plan-comparison">
             <div
               ref={comparisonHeadingRef}
               className="flex items-center gap-2 bg-valasys-gray-50 border rounded-t-lg px-4 py-3 text-valasys-gray-800"
             >
-              <img src="/public/placeholder.svg" alt="" className="w-5 h-5" />
               <div>
                 <div className="font-semibold">Plan comparison</div>
                 <div className="text-xs text-valasys-gray-600">
@@ -493,279 +701,102 @@ export default function Subscription() {
                 </div>
               </div>
             </div>
-            <CardContent className="p-0">
-              <div className="overflow-auto">
-                <table className="w-full text-sm">
-                  <thead className="sticky top-0 bg-white">
-                    <tr className="border-b align-top">
-                      <th className="px-4 py-4"></th>
-                      {sortedPlans.map((p) => {
-                        const d = planDisplay(p, billing);
-                        const isSelected = selectedPlan === p.id;
-                        const isEnterprise = p.id === "enterprise";
-                        return (
-                          <th key={p.id} className="px-4 py-4 align-top">
-                            <div
-                              className={`relative rounded-xl border shadow-sm p-4 text-left flex flex-col gap-2 ${p.id === "free" || p.id === "enterprise" ? "cursor-default" : "cursor-pointer"} ${isSelected ? "ring-2 ring-yellow-300 bg-yellow-50" : "bg-white"}`}
-                              onClick={
-                                p.id === "free" || p.id === "enterprise"
-                                  ? undefined
-                                  : () => selectPlan(p.id as any)
-                              }
-                              role={
-                                p.id === "free" || p.id === "enterprise"
-                                  ? undefined
-                                  : "button"
-                              }
-                              tabIndex={
-                                p.id === "free" || p.id === "enterprise"
-                                  ? -1
-                                  : 0
-                              }
-                              onKeyDown={(e) => {
-                                if (
-                                  p.id !== "free" &&
-                                  p.id !== "enterprise" &&
-                                  (e.key === "Enter" || e.key === " ")
-                                ) {
-                                  e.preventDefault();
-                                  selectPlan(p.id as any);
-                                }
-                              }}
-                            >
-                              {p.popular && (
-                                <Badge className="bg-valasys-orange text-white w-fit mb-1">
-                                  MOST POPULAR
-                                </Badge>
-                              )}
-                              <div className="text-base md:text-lg font-semibold text-valasys-gray-900 flex items-center gap-2">
-                                {planIcon(p.id)}
-                                <span>{p.name}</span>
-                              </div>
-                              {p.description && (
-                                <div className="text-xs text-valasys-gray-600 mt-1 line-clamp-2">
-                                  {p.description}
-                                </div>
-                              )}
-                              <div className="text-2xl font-bold mt-3">
-                                {d.priceLabel}
-                                {d.priceSuffix && (
-                                  <span className="text-sm text-valasys-gray-500">
-                                    {" "}
-                                    {d.priceSuffix}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="text-xs text-valasys-gray-500">
-                                {d.billedNote}
-                              </div>
-                              <div className="my-3 h-px bg-valasys-gray-200" />
-                              <div className="text-[17px] font-semibold text-black flex items-center gap-2">
-                                <Coins className="w-5 h-5 text-black" />
-                                {d.credits}
-                              </div>
-                              <div className="pt-2">
-                                {isEnterprise ? (
-                                  <Button
-                                    onClick={() => selectPlan(p.id as any)}
-                                    className={`w-full ${isSelected ? "bg-[#424242] text-white border-2 border-[#424242]" : "border-2 border-valasys-orange text-valasys-orange bg-white hover:bg-gradient-to-r hover:from-valasys-orange hover:to-valasys-orange-light hover:text-white"}`}
-                                  >
-                                    {isSelected && (
-                                      <Check className="w-4 h-4 mr-2" />
-                                    )}
-                                    Contact to our sales
-                                  </Button>
-                                ) : (
-                                  <Button
-                                    onClick={() => selectPlan(p.id as any)}
-                                    disabled={p.id === "free"}
-                                    className={`w-full ${isSelected ? "bg-[#424242] text-white" : "bg-gradient-to-r from-valasys-orange to-valasys-orange-light text-white hover:from-valasys-orange/90 hover:to-valasys-orange-light/90"}`}
-                                  >
-                                    {isSelected && (
-                                      <Check className="w-4 h-4 mr-2" />
-                                    )}
-                                    {isSelected
-                                      ? "Selected"
-                                      : p.id === "free"
-                                        ? "Current Plan"
-                                        : "Select Plan"}
-                                  </Button>
-                                )}
-                              </div>
-                            </div>
-                          </th>
-                        );
-                      })}
-                    </tr>
-                    <tr className="border-b">
-                      <th className="text-left px-4 py-3 font-medium text-valasys-gray-600">
-                        Features
-                      </th>
-                      <th className="px-4 py-3 text-center">Free</th>
-                      <th className="px-4 py-3 text-center">Growth</th>
-                      <th className="px-4 py-3 text-center">Scale</th>
-                      <th className="px-4 py-3 text-center">Enterprise</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr className="bg-valasys-gray-50/60">
-                      <td
-                        colSpan={5}
-                        className="px-4 py-2 text-xs uppercase tracking-wide text-valasys-gray-500"
-                      >
-                        Core Platform Modules
-                      </td>
-                    </tr>
-                    {coreRows.map((row) => (
-                      <tr key={row.label} className="border-b">
-                        <td className="px-4 py-3 font-medium text-valasys-gray-800">
-                          {row.label}
-                        </td>
-                        {row.values.map((v, i) => (
-                          <td key={i} className="px-4 py-3 text-center">
-                            {v === "-" ? (
-                              <span className="text-valasys-gray-300">—</span>
-                            ) : v === "✖" ? (
-                              <CircleX className="w-5 h-5 mx-auto text-red-500" />
-                            ) : typeof v === "string" ? (
-                              <span className="inline-block rounded-full border px-2 py-0.5 text-xs text-valasys-gray-700">
-                                {v}
-                              </span>
-                            ) : v ? (
-                              <CircleCheckBig className="w-5 h-5 mx-auto text-green-600" />
-                            ) : (
-                              <CircleX className="w-5 h-5 mx-auto text-red-500" />
-                            )}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-
-                    <tr className="bg-valasys-gray-50/60">
-                      <td
-                        colSpan={5}
-                        className="px-4 py-2 text-xs uppercase tracking-wide text-valasys-gray-500"
-                      >
-                        High Value Account Insights
-                      </td>
-                    </tr>
-                    {insightsRows.map((row) => (
-                      <tr key={row.label} className="border-b">
-                        <td className="px-4 py-3 font-medium text-valasys-gray-800">
-                          {row.label}
-                        </td>
-                        {row.values.map((v, i) => (
-                          <td key={i} className="px-4 py-3 text-center">
-                            {v === "-" ? (
-                              <span className="text-valasys-gray-300">—</span>
-                            ) : v === "✖" ? (
-                              <CircleX className="w-5 h-5 mx-auto text-red-500" />
-                            ) : typeof v === "string" ? (
-                              <span className="inline-block rounded-full border px-2 py-0.5 text-xs text-valasys-gray-700">
-                                {v}
-                              </span>
-                            ) : v ? (
-                              <CircleCheckBig className="w-5 h-5 mx-auto text-green-600" />
-                            ) : (
-                              <CircleX className="w-5 h-5 mx-auto text-red-500" />
-                            )}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
+            <PlanComparisonTable
+              billing={billing}
+              plans={sortedPlans}
+              selectedPlan={selectedPlan}
+              onSelect={(id) => selectPlan(id)}
+            />
+          </div>
         )}
 
-        <div className="flex justify-center">
-          <Button
-            size="lg"
-            className="bg-valasys-orange text-white hover:bg-valasys-orange/90"
+        {selectedPlanObj && (
+          <div
+            ref={summaryRef}
+            className="fixed bottom-0 z-[80] border-t border-valasys-gray-200 bg-white rounded-t-lg shadow-2xl drop-shadow-2xl shadow-[0_-12px_36px_rgba(0,0,0,0.18)] w-full"
+            style={{
+              left: `${summaryBounds.left}px`,
+              width: `${summaryBounds.width}px`,
+            }}
           >
-            <CreditCard className="w-5 h-5 mr-2" /> Credit Usage Comparison
-          </Button>
-        </div>
-      </div>
-      {selectedPlanObj && (
-        <div className="fixed bottom-0 left-0 right-0 z-[80] border-t border-valasys-gray-200 bg-white/90 backdrop-blur">
-          <div className="max-w-7xl mx-auto px-4 py-3">
-            <div className="grid grid-cols-1 md:grid-cols-5 items-center gap-4">
-              <div>
-                <div className="text-xs font-medium text-valasys-gray-500">
-                  Summary
+            <div className="px-4 py-3 text-[17px]">
+              <div className="grid grid-cols-1 md:grid-cols-2 items-center gap-6">
+                <div>
+                  <div className="font-medium text-valasys-gray-500">
+                    Summary
+                  </div>
+                  <div className="font-semibold text-valasys-gray-900 flex items-center gap-2">
+                    {planIcon(selectedPlanObj.id)}
+                    <span>{selectedPlanObj.name}</span>
+                    <span className="ml-1 px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 border border-yellow-200 text-[12px]">
+                      Selected
+                    </span>
+                  </div>
+                  <button
+                    className="underline text-valasys-gray-600 hover:text-valasys-gray-900"
+                    onClick={() => {
+                      if (!showComparison) handleToggleComparison();
+                      else {
+                        requestAnimationFrame(() => {
+                          const el = document.getElementById("plan-comparison");
+                          if (!el) return;
+                          const rect = el.getBoundingClientRect();
+                          const top = rect.top + window.scrollY - 120;
+                          window.scrollTo({ top, behavior: "smooth" });
+                        });
+                      }
+                    }}
+                  >
+                    See price breakdown
+                  </button>
                 </div>
-                <div className="text-sm font-semibold text-valasys-gray-900">
-                  {selectedPlanObj.name}
+                <div className="md:text-right">
+                  <div className="flex flex-wrap items-center justify-center md:justify-end">
+                    <div className="pr-6">
+                      <div className="text-valasys-gray-500">
+                        Billed {billing === "annual" ? "Annually" : "Monthly"}
+                      </div>
+                      <div className="font-semibold text-valasys-gray-900">
+                        {(() => {
+                          const p = selectedPlanObj;
+                          if (!p) return "";
+                          if (p.id === "enterprise") return "Custom";
+                          const amt =
+                            billing === "annual"
+                              ? p.priceAnnual * 12
+                              : p.priceMonthly;
+                          const suffix = billing === "annual" ? "/yr" : "/mo";
+                          return `$${amt}${suffix}`;
+                        })()}
+                      </div>
+                    </div>
+                    <div className="pl-6 pr-6 border-l border-valasys-gray-200">
+                      <div className="text-valasys-gray-500">Due Today</div>
+                      <div className="font-semibold text-valasys-gray-900">
+                        {(() => {
+                          const p = selectedPlanObj;
+                          if (!p) return "";
+                          if (p.id === "enterprise") return "Custom";
+                          const amt =
+                            billing === "annual"
+                              ? p.priceAnnual * 12
+                              : p.priceMonthly;
+                          return `$${amt}`;
+                        })()}
+                      </div>
+                    </div>
+                    <div className="mt-3 md:mt-0 md:pl-6 md:border-l border-valasys-gray-200 w-full md:w-auto flex justify-center">
+                      <Button className="bg-gradient-to-r from-valasys-orange to-valasys-orange-light text-white hover:from-valasys-orange/90 hover:to-valasys-orange-light/90 mx-auto">
+                        <CreditCard className="w-5 h-5 mr-2" /> Upgrade Plan
+                      </Button>
+                    </div>
+                  </div>
                 </div>
-                <button
-                  className="text-xs underline text-valasys-gray-600 hover:text-valasys-gray-900"
-                  onClick={() => {
-                    if (!showComparison) handleToggleComparison();
-                    else {
-                      requestAnimationFrame(() => {
-                        const el = document.getElementById("plan-comparison");
-                        if (!el) return;
-                        const rect = el.getBoundingClientRect();
-                        const top = rect.top + window.scrollY - 120;
-                        window.scrollTo({ top, behavior: "smooth" });
-                      });
-                    }
-                  }}
-                >
-                  See price breakdown
-                </button>
-              </div>
-              <div className="flex items-center gap-2 md:justify-center">
-                <div className="text-xs text-valasys-gray-500">Seats</div>
-                <div className="text-sm font-medium text-valasys-gray-900">
-                  1 user
-                </div>
-              </div>
-              <div className="md:text-center">
-                <div className="text-xs text-valasys-gray-500">
-                  Billed {billing === "annual" ? "Annually" : "Monthly"}
-                </div>
-                <div className="text-sm font-semibold text-valasys-gray-900">
-                  {(() => {
-                    const p = selectedPlanObj;
-                    if (!p) return "";
-                    if (p.id === "enterprise") return "Custom";
-                    const amt =
-                      billing === "annual"
-                        ? p.priceAnnual * 12
-                        : p.priceMonthly;
-                    const suffix = billing === "annual" ? "/yr" : "/mo";
-                    return `$${amt}${suffix}`;
-                  })()}
-                </div>
-              </div>
-              <div className="md:text-center">
-                <div className="text-xs text-valasys-gray-500">Due Today</div>
-                <div className="text-sm font-semibold text-valasys-gray-900">
-                  {(() => {
-                    const p = selectedPlanObj;
-                    if (!p) return "";
-                    if (p.id === "enterprise") return "Custom";
-                    const amt =
-                      billing === "annual"
-                        ? p.priceAnnual * 12
-                        : p.priceMonthly;
-                    return `$${amt}`;
-                  })()}
-                </div>
-              </div>
-              <div className="md:text-right">
-                <Button className="bg-yellow-300 text-black hover:bg-yellow-400">
-                  Upgrade
-                </Button>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </DashboardLayout>
   );
 }
